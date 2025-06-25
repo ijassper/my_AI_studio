@@ -44,7 +44,7 @@ try:
         ]
     )
 except Exception as e:
-    st.error(f"모델을 로드하는 중 오류가 발생했습니다: {e}")
+    st.error(f"모델을 로드하는 중 오류가 발생했습니다:\n {e}")
     st.stop()
 
 
