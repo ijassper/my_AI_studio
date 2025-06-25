@@ -14,11 +14,9 @@ with st.sidebar:
 
     # 구글 API 키 설정
     try:
-        # Streamlit Secrets에서 API 키 가져오기
         api_key = st.secrets["GOOGLE_API_KEY"]
         genai.configure(api_key=api_key)
     except (KeyError, Exception):
-        # Secrets에 키가 없을 경우 사용자가 직접 입력
         api_key = st.text_input("Google AI Studio API 키를 입력하세요.", type="password")
         if api_key:
             genai.configure(api_key=api_key)
@@ -26,47 +24,41 @@ with st.sidebar:
             st.info("사이드바에서 API 키를 입력해주세요.")
             st.stop()
     
-    # 모델 선택 (Gemini 모델 목록)
-    # gemini-pro를 기본값으로 설정하여 한도 문제를 피합니다.
+    # 모델 선택
     model_options = ("gemini-pro", "gemini-1.5-pro-latest")
-    st.session_state["gemini_model"] = st.selectbox(
+    selected_model = st.selectbox(
         "사용할 모델을 선택하세요.",
         model_options,
-        index=0 # 첫 번째 항목인 'gemini-pro'를 기본으로 선택
+        index=0
     )
 
     # 대화 초기화 버튼
     if st.button("대화 기록 초기화"):
-        # st.session_state의 모든 키를 삭제하여 초기화
-        for key in st.session_state.keys():
-            del st.session_state[key]
+        st.session_state.messages = []
+        st.session_state.chat = None # 채팅 세션도 초기화
         st.rerun()
 
 # --- 메인 화면 ---
 st.title("Gemini-like Clone")
-st.caption(f"현재 사용 중인 모델: {st.session_state['gemini_model']}")
+st.caption(f"현재 사용 중인 모델: {selected_model}")
 
-
-# 세션 상태 초기화: 채팅 기록과 채팅 세션
+# 세션 상태 초기화
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# Gemini 모델 및 채팅 세션 로드
-# 모델이 변경되면 채팅 세션을 다시 시작
-if "chat" not in st.session_state or st.session_state.get("model_changed"):
-    model = genai.GenerativeModel(st.session_state["gemini_model"])
-    # 이전 대화 기록을 포함하여 채팅 세션 시작
-    history = [
-        {"role": msg["role"], "parts": [msg["content"]]}
-        for msg in st.session_state.messages
-    ]
-    st.session_state.chat = model.start_chat(history=history)
-    st.session_state.model_changed = False
+# --- ✨ 핵심 수정 로직 ✨ ---
+# 모델이 변경되었거나 채팅 세션이 아직 없으면 새로 생성
+# st.session_state.chat.model_name으로 현재 채팅의 모델 이름을 확인
+current_chat_model = getattr(getattr(st.session_state, 'chat', None), 'model_name', None)
 
+if "chat" not in st.session_state or st.session_state.chat is None or not current_chat_model.endswith(selected_model):
+    model = genai.GenerativeModel(selected_model)
+    st.session_state.chat = model.start_chat(history=[]) # 모델이 바뀌면 대화기록은 새로 시작
+    st.session_state.messages = [] # UI 메시지 기록도 초기화
+    st.info(f"✨ 모델이 {selected_model}(으)로 변경되었습니다. 새로운 대화를 시작합니다.")
 
 # 이전 대화 내용 표시
 for message in st.session_state.messages:
-    # Gemini는 'assistant' 대신 'model' 역할을 사용
     role = "assistant" if message["role"] == "model" else message["role"]
     with st.chat_message(role):
         st.markdown(message["content"])
@@ -81,13 +73,16 @@ if prompt := st.chat_input("무엇이든 물어보세요!"):
     # 어시스턴트 응답 처리
     with st.chat_message("assistant"):
         try:
-            # Gemini API로 메시지 전송 및 스트리밍 응답 받기
+            # 대화 기록을 API에 전달
+            st.session_state.chat.history = [
+                {"role": msg["role"], "parts": [msg["content"]]}
+                for msg in st.session_state.messages[:-1] # 마지막 AI 응답은 제외
+            ]
+            
             response_stream = st.session_state.chat.send_message(prompt, stream=True)
             
-            # st.write_stream을 사용하여 스트리밍 데이터를 편리하게 처리
             def stream_generator(stream):
                 for chunk in stream:
-                    # 일부 chunk에 text가 없는 경우가 있을 수 있으므로 예외 처리
                     try:
                         yield chunk.text
                     except Exception:
@@ -95,10 +90,8 @@ if prompt := st.chat_input("무엇이든 물어보세요!"):
             
             response = st.write_stream(stream_generator(response_stream))
 
-            # 전체 응답을 세션 상태에 저장 (Gemini는 'model' 역할 사용)
-            st.session_state.messages.append(
-                {"role": "model", "content": response}
-            )
+            # 전체 응답을 세션 상태에 저장
+            st.session_state.messages.append({"role": "model", "content": response})
 
         except Exception as e:
             st.error(f"❌ 오류가 발생했습니다:\n {e}")
