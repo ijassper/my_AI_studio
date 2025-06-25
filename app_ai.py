@@ -3,13 +3,13 @@ import streamlit as st
 
 # --- 페이지 설정 ---
 st.set_page_config(
-    page_title="나만의 Gemini 챗봇",
+    page_title="나만의 Gemini AI",
     page_icon="✨"
 )
 
 # --- 사이드바 ---
 with st.sidebar:
-    st.title("✨ 나만의 Gemini 챗봇")
+    st.title("✨ 나만의 Gemini")
     st.header("설정")
 
     # 구글 API 키 설정
@@ -27,9 +27,12 @@ with st.sidebar:
             st.stop()
     
     # 모델 선택 (Gemini 모델 목록)
+    # gemini-pro를 기본값으로 설정하여 한도 문제를 피합니다.
+    model_options = ("gemini-pro", "gemini-1.5-pro-latest")
     st.session_state["gemini_model"] = st.selectbox(
         "사용할 모델을 선택하세요.",
-        ("gemini-1.5-pro-latest", "gemini-pro") # 필요에 따라 다른 모델 추가
+        model_options,
+        index=0 # 첫 번째 항목인 'gemini-pro'를 기본으로 선택
     )
 
     # 대화 초기화 버튼
@@ -98,4 +101,4 @@ if prompt := st.chat_input("무엇이든 물어보세요!"):
             )
 
         except Exception as e:
-            st.error(f"❌ 오류가 발생했습니다: {e}")
+            st.error(f"❌ 오류가 발생했습니다:\n {e}")
