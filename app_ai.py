@@ -44,26 +44,20 @@ st.caption(f"현재 사용 중인 모델: {selected_model}")
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# --- ✨ 핵심 수정 로직 (NoneType 오류 방지) ✨ ---
-# 채팅 세션을 새로 만들어야 하는지 결정하는 변수
-needs_new_chat = False
-
-# 1. chat 세션이 없거나, 있더라도 None인 경우
-if "chat" not in st.session_state or st.session_state.chat is None:
-    needs_new_chat = True
-# 2. chat 세션이 있지만, 선택된 모델과 다른 경우
-elif not st.session_state.chat.model_name.endswith(selected_model):
-    needs_new_chat = True
-    # 모델 변경 시에는 대화 기록을 초기화하고 사용자에게 알림
-    st.session_state.messages = []
-    st.info(f"✨ 모델이 {selected_model}(으)로 변경되었습니다. 새로운 대화를 시작합니다.")
-    # st.rerun()을 호출하여 UI를 즉시 새로고침
-    st.rerun()
-
-# 위 조건에 따라 새로운 채팅 세션을 생성
-if needs_new_chat:
+# --- ✨ 핵심 수정 로직 (가장 안정적인 최종 버전) ✨ ---
+# 다음 세 가지 경우 중 하나라도 해당되면 새로운 채팅 세션을 생성합니다.
+# 1. 'chat' 세션이 아예 없는 경우 (앱 최초 실행)
+# 2. 'chat' 세션이 있지만 그 값이 None인 경우 (초기화 등으로 인해)
+# 3. 'chat' 세션이 있지만, 현재 선택된 모델과 다른 모델로 만들어진 경우
+if "chat" not in st.session_state or st.session_state.get("chat") is None or not st.session_state.chat.model_name.endswith(selected_model):
+    # 새로운 모델로 채팅 객체를 생성
     model = genai.GenerativeModel(model_name=selected_model)
     st.session_state.chat = model.start_chat(history=[])
+    # 모델이 변경되었을 때만 메시지 기록을 초기화 (최초 실행 시에는 불필요)
+    # 이미 'chat'이 있었다는 것은 모델이 '변경'되었다는 의미
+    if "chat" in st.session_state and st.session_state.get("chat") is not None:
+         st.session_state.messages = []
+         st.info(f"✨ 모델이 {selected_model}(으)로 변경되었습니다. 새로운 대화를 시작합니다.")
 
 # 이전 대화 내용 표시
 for message in st.session_state.messages:
