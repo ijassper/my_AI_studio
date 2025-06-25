@@ -60,14 +60,12 @@ if prompt := st.chat_input("무엇이든 물어보세요!"):
         try:
             response_stream = chat.send_message(prompt, stream=True)
             
-            # 더 안전한 스트림 제너레이터 함수
             def stream_handler(stream):
                 for chunk in stream:
-                    # 안전하게 텍스트 추출 시도
                     try:
                         yield chunk.text
                     except Exception:
-                        continue # 텍스트가 없는 청크는 건너뜀
+                        continue
             
             response_text = st.write_stream(stream_handler(response_stream))
 
