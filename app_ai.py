@@ -20,21 +20,18 @@ with st.sidebar:
     model_choice = st.selectbox(
         "사용할 모델을 선택하세요.",
         ("gemini-pro", "gemini-1.5-pro-latest"),
-        key="model_choice" # selectbox 상태를 session_state에 저장
+        key="model_choice"
     )
 
     if st.button("대화 기록 초기화"):
-        st.session_state.messages = [] # 메시지만 초기화
+        st.session_state.messages = []
         st.rerun()
 
 # --- 세션 상태 초기화 ---
-# 앱이 처음 시작될 때 'messages' 리스트를 생성
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# --- ✨ 핵심 해결 로직: 매번 채팅 객체 새로 생성 ✨ ---
-# 저장된 대화 기록(messages)을 바탕으로 Gemini 모델과 채팅 세션을 시작
-# 이 코드는 스크립트가 실행될 때마다 호출되므로 항상 최신 상태를 반영
+# --- 채팅 객체 생성 ---
 try:
     model = genai.GenerativeModel(model_name=model_choice)
     chat = model.start_chat(
@@ -44,12 +41,10 @@ try:
         ]
     )
 except Exception as e:
-    st.error(f"모델을 로드하는 중 오류가 발생했습니다:\n {e}")
+    st.error(f"모델을 로드하는 중 오류가 발생했습니다: {e}")
     st.stop()
 
-
 # --- 대화 내용 표시 ---
-# st.session_state.messages에 저장된 모든 메시지를 순회하며 화면에 출력
 for message in st.session_state.messages:
     role = "assistant" if message["role"] == "model" else message["role"]
     with st.chat_message(role):
@@ -57,25 +52,27 @@ for message in st.session_state.messages:
 
 # --- 사용자 입력 처리 ---
 if prompt := st.chat_input("무엇이든 물어보세요!"):
-    # 1. 사용자 메시지를 session_state와 화면에 추가
     st.session_state.messages.append({"role": "user", "content": prompt})
     with st.chat_message("user"):
         st.markdown(prompt)
 
-    # 2. 어시스턴트 응답 처리
     with st.chat_message("assistant"):
         try:
-            # 새로 생성된 chat 객체를 사용해 API에 메시지 전송
             response_stream = chat.send_message(prompt, stream=True)
             
-            # 스트리밍 응답을 화면에 실시간으로 표시
-            response_text = st.write_stream(
-                (chunk.text for chunk in response_stream)
-            )
+            # 더 안전한 스트림 제너레이터 함수
+            def stream_handler(stream):
+                for chunk in stream:
+                    # 안전하게 텍스트 추출 시도
+                    try:
+                        yield chunk.text
+                    except Exception:
+                        continue # 텍스트가 없는 청크는 건너뜀
+            
+            response_text = st.write_stream(stream_handler(response_stream))
 
-            # 3. 전체 응답을 session_state에 저장
             st.session_state.messages.append(
                 {"role": "model", "content": response_text}
             )
         except Exception as e:
-            st.error(f"❌ 메시지 전송 중 오류 발생: {e}")
+            st.error(f"❌ 메시지 전송 중 오류 발생:\n {e}")
