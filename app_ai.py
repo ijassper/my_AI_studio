@@ -31,7 +31,6 @@ with st.sidebar:
     )
 
     if st.button("대화 기록 초기화"):
-        # 필요한 세션 상태만 초기화
         st.session_state.messages = []
         if "chat" in st.session_state:
             del st.session_state["chat"]
@@ -45,23 +44,26 @@ st.caption(f"현재 사용 중인 모델: {selected_model}")
 if "messages" not in st.session_state:
     st.session_state.messages = []
 
-# --- ✨ 핵심 수정 로직 (더 안전하게 변경) ✨ ---
-# 현재 세션의 모델 이름과 선택된 모델이 다른지 확인하는 변수
-model_changed = False
-if "chat" in st.session_state:
-    # 'gemini-pro'는 'models/gemini-pro'와 같이 저장되므로 endswith 사용
-    if not st.session_state.chat.model_name.endswith(selected_model):
-        model_changed = True
+# --- ✨ 핵심 수정 로직 (NoneType 오류 방지) ✨ ---
+# 채팅 세션을 새로 만들어야 하는지 결정하는 변수
+needs_new_chat = False
 
-# 채팅 세션이 없거나 모델이 변경되었으면 새로 생성
-if "chat" not in st.session_state or model_changed:
+# 1. chat 세션이 없거나, 있더라도 None인 경우
+if "chat" not in st.session_state or st.session_state.chat is None:
+    needs_new_chat = True
+# 2. chat 세션이 있지만, 선택된 모델과 다른 경우
+elif not st.session_state.chat.model_name.endswith(selected_model):
+    needs_new_chat = True
+    # 모델 변경 시에는 대화 기록을 초기화하고 사용자에게 알림
+    st.session_state.messages = []
+    st.info(f"✨ 모델이 {selected_model}(으)로 변경되었습니다. 새로운 대화를 시작합니다.")
+    # st.rerun()을 호출하여 UI를 즉시 새로고침
+    st.rerun()
+
+# 위 조건에 따라 새로운 채팅 세션을 생성
+if needs_new_chat:
     model = genai.GenerativeModel(model_name=selected_model)
     st.session_state.chat = model.start_chat(history=[])
-    # 모델이 바뀌면 이전 대화는 의미가 없으므로 메시지 기록 초기화
-    if model_changed:
-        st.session_state.messages = []
-        st.info(f"✨ 모델이 {selected_model}(으)로 변경되었습니다. 새로운 대화를 시작합니다.")
-        st.rerun() # UI를 즉시 새로고침하여 메시지 목록을 비움
 
 # 이전 대화 내용 표시
 for message in st.session_state.messages:
